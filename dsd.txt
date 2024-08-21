@@ -1,0 +1,308 @@
+properties([parameters([choice(choices: ['Daily Build(Stage)', 'Stage','Production (Non-Puppet)','Production (Puppet)','GCP','Canada','EU','Non-fedramp GovCloud'], description: '', name: 'TenantEnvironment'),choice(choices: ['','Winter_2024.0.1','Winter_2024.0.2','Winter_2024.0.3','Spring_2024.0.4','Spring_2024.0.5','Spring_2024.1.0','Summer_2024.1.1','Summer_2024.1.2','Summer_2024.1.3','Fall_2024.1.4','Fall_2024.1.5','Fall_2024.2.0','Fall_2024.2.1','Winter 2025.1.0'], description: '', name: 'SprintVersion')]), [$class: 'JobLocalConfiguration', changeReasonComment: '']])    
+
+
+pipeline
+{
+    agent {label 'winslave'}
+       options {    
+  ansiColor('xterm')
+}
+   
+    stages{
+    
+        stage('CleanWS'){
+            steps{
+              //  cleanWs()
+              echo 'CLEAN'
+            }
+        }
+        stage('Checkout')
+        {
+            steps
+            {
+              checkout([$class: 'GitSCM', branches: [[name: '*/Staging']], extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'cypress']], userRemoteConfigs: [[credentialsId: 'c75bd96d-fa82-45b3-a2eb-c264ef14fa85', url: 'ssh://APKASTHL7BV3EG7VXHRM@git-codecommit.us-west-1.amazonaws.com/v1/repos/cypress_automation']]])
+                 
+             }
+        }
+        
+                  stage('Check package.json changes') {
+            steps {
+                script {
+                    dir("${env.WORKSPACE}/cypress") {
+                        def hasPackageJsonChanged = bat(script: 'git diff --name-only HEAD HEAD~1 | findstr "package.json"', returnStatus: true) == 0
+                        env.RUN_NPM_INSTALL = hasPackageJsonChanged ? 'true' : 'false'
+                        
+                         if (env.RUN_NPM_INSTALL == 'true') {
+                                bat "npm install"
+                            }
+                    }
+                }
+            }
+        }
+
+        stage('Run setup')
+        {
+            steps
+            {
+                script {
+                        
+                        if(env.TenantEnvironment == 'Daily Build(Stage)')
+                        {
+                            env.Tenantname = "qastagasset"
+                            env.Fusion_UserName="Jomy"
+                            env.Fusion_Password="Exterro-098"
+                            env.fusionURL="https://qastagasset.exterro.net/"
+                            env.SSO_UserName="jomy@exterro.info"
+                            env.SSO_Password="Exterro-abcd12345"
+                                
+                        }  
+                         else if(env.TenantEnvironment == 'Stage')
+                        {
+                
+                            env.Tenantname = "qastagasset"
+                            env.Fusion_UserName="Sara"
+                            env.Fusion_Password="Password-098"
+                            env.fusionURL="https://qastagasset.exterro.net/"
+                              env.SSO_UserName="jomy@exterro.info"
+                                env.SSO_Password="Exterro-abcd12345"
+                        }
+                         else if (env.TenantEnvironment == 'Production (Non-Puppet)'){
+                                
+                            env.Tenantname = "qatestdrp9"
+                            env.Fusion_UserName="sara"
+                            env.Fusion_Password="Password-098"
+                            env.fusionURL="https://qatestdrp9.exterro.net/"
+                              env.SSO_UserName="jomy@exterro.info"
+                                env.SSO_Password="Exterro-abcd12345"
+                            
+                           
+                         }
+                          else if (env.TenantEnvironment == 'Production (Puppet)'){
+                              
+                                env.Tenantname = "qaprodpuppet16"
+                                env.Fusion_UserName="Sara"
+                                env.Fusion_Password="Password-098"
+                                env.fusionURL="https://qaprodpuppet16.exterro.net/"
+                                  env.SSO_UserName="jomy@exterro.info"
+                                env.SSO_Password="Exterro-abcd12345"
+                      
+                         }
+                          else if (env.TenantEnvironment == 'GCP'){
+                              
+                                env.Tenantname = "qagcpprod"
+                                env.Fusion_UserName="sara"
+                                env.Fusion_Password="Password-098"
+                                env.fusionURL="https://qagcpprod.exterro.net/"
+                                  env.SSO_UserName="jomy@exterro.info"
+                                env.SSO_Password="Exterro-abcd12345"
+                                
+                            
+                         }
+                         else if (env.TenantEnvironment == 'Canada'){
+                             
+                               env.Tenantname = "qaprodca"
+                                env.Fusion_UserName="sara"
+                                env.Fusion_Password="Password-098"
+                                env.fusionURL="https://qaprodca.exterro.net/"
+                                env.SSO_UserName="jomy@exterro.info"
+                                env.SSO_Password="Exterro-abcd12345"
+                             
+                         }
+                          else if (env.TenantEnvironment == 'EU'){
+                              
+                               env.Tenantname = "qatesteu1"
+                                env.Fusion_UserName="Sara"
+                                env.Fusion_Password="Password-123"
+                                env.fusionURL="https://qatesteu1.exterro.net/"
+                                  env.SSO_UserName="jomy@exterro.info"
+                                env.SSO_Password="Exterro-abcd12345"
+                                
+                           }
+                         else if (env.TenantEnvironment == 'Non-fedramp GovCloud'){
+                             
+                                env.Tenantname = "qagovdrp1"
+                                env.Fusion_UserName="sara"
+                                env.Fusion_Password="Password-098"
+                                env.fusionURL="https://qagovdrp1.exterro.net/"
+                                 env.SSO_UserName="jomy@exterro.info"
+                                env.SSO_Password="Exterro-abcd12345"
+                         }
+                       
+                   }    
+            }
+        }
+     
+        
+         stage('Run Autodiscovery')
+        {
+            steps
+            {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE'){
+                script {
+                    
+                        dir("${env.WORKSPACE}/cypress"){
+                            
+                         if(env.TenantEnvironment == 'Daily Build(Stage)')
+                        {
+                            bat 'npx cypress run --headless  --spec "cypress/e2e/FeatureFiles/DSD_FeatureFiles/**/*.feature" -e stepDefinitions="cypress/e2e/StepDefinitions/DSD_StepDefinitions/**/*.js",SSO_UserName='+env.SSO_UserName+',SSO_Password='+env.SSO_Password+',Fusion_UserName='+env.Fusion_UserName+',Fusion_Password='+env.Fusion_Password+',fusionURL='+env.fusionURL+',TAGS="@NON_O365_AutoDiscovery_dailyBuild"'
+
+                        }
+                        else{
+                            bat 'npx cypress run --headless  --spec "cypress/e2e/FeatureFiles/DSD_FeatureFiles/**/*.feature" -e stepDefinitions="cypress/e2e/StepDefinitions/DSD_StepDefinitions/**/*.js",SSO_UserName='+env.SSO_UserName+',SSO_Password='+env.SSO_Password+',Fusion_UserName='+env.Fusion_UserName+',Fusion_Password='+env.Fusion_Password+',fusionURL='+env.fusionURL+',TAGS="@NON_O365_AutoDiscovery"'
+                        }
+                        }
+                   }  
+                }
+            }
+            
+           
+        }
+      
+       stage('Run Datasources')
+         {
+              steps
+            {
+                
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE'){
+                script {
+                          
+                        dir("${env.WORKSPACE}/cypress"){
+                            
+                             if(env.TenantEnvironment == 'Daily Build(Stage)')
+                        {
+                            bat 'npx cypress run --headless  --spec "cypress/e2e/FeatureFiles/DSD_FeatureFiles/**/*.feature" -e stepDefinitions="cypress/e2e/StepDefinitions/DSD_StepDefinitions/**/*.js",SSO_UserName='+env.SSO_UserName+',SSO_Password='+env.SSO_Password+',Fusion_UserName='+env.Fusion_UserName+',Fusion_Password='+env.Fusion_Password+',fusionURL='+env.fusionURL+',TAGS="@NON_O365_DataSources_dailyBuild"'
+
+                        }
+                         else{
+                             bat 'npx cypress run --headless  --spec "cypress/e2e/FeatureFiles/DSD_FeatureFiles/**/*.feature" -e stepDefinitions="cypress/e2e/StepDefinitions/DSD_StepDefinitions/**/*.js",SSO_UserName='+env.SSO_UserName+',SSO_Password='+env.SSO_Password+',Fusion_UserName='+env.Fusion_UserName+',Fusion_Password='+env.Fusion_Password+',fusionURL='+env.fusionURL+',TAGS="@NON_O365_DataSources"'
+
+                         }       
+                        }
+                            
+                   }    
+                }
+            }
+            
+           
+         }
+         
+         stage('Run auditlog'){
+              steps
+            {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE'){
+                script {
+                          
+                        dir("${env.WORKSPACE}/cypress"){
+                            
+                             bat 'npx cypress run --headless  --spec "cypress/e2e/FeatureFiles/DSD_FeatureFiles/**/*.feature" -e stepDefinitions="cypress/e2e/StepDefinitions/DSD_StepDefinitions/**/*.js",SSO_UserName='+env.SSO_UserName+',SSO_Password='+env.SSO_Password+',Fusion_UserName='+env.Fusion_UserName+',Fusion_Password='+env.Fusion_Password+',fusionURL='+env.fusionURL+',TAGS="@NON_O365_AuditLog"'
+
+                         }
+                            
+                   }    
+                }
+            }
+         }
+     
+    }
+    
+    post{
+        
+           
+        
+         always{
+          
+          script {
+                        
+                    dir("${env.WORKSPACE}/cypress"){
+                        bat "npm run posttest"
+                        def filePath = 'Reports/ReportName.txt'
+                        def fileContents = readFile(file: filePath).trim()
+                        def calendar = Calendar.getInstance()
+                        calendar.timeZone = TimeZone.getTimeZone("IST")
+                         def year = calendar.get(Calendar.YEAR)
+                     def monthNum = calendar.get(Calendar.MONTH) + 1
+                    def month = String.format('%02d', calendar.get(Calendar.MONTH) + 1)
+                    def date = String.format('%02d', calendar.get(Calendar.DATE))
+                         def monthNames = ["January", "February", "March", "April", "May", "June",
+                        "July", "August", "September", "October", "November", "December"]
+
+                        def monthName = monthNames[monthNum - 1]
+
+                        if(env.TenantEnvironment == 'Daily Build(Stage)')
+                        {
+                             def folderPath = "E:/Apache24/htdocs/cypress/${year}/${TenantEnvironment}/${monthName}/${date}_${month}_${year}/DSD NonO365/${JOB_NAME}_${BUILD_NUMBER}"
+                            fileOperations([folderCreateOperation(folderPath), folderCopyOperation(destinationFolderPath: folderPath, sourceFolderPath:fileContents)])
+                        }
+                        else{
+                            
+                            def folderPath = "E:/Apache24/htdocs/cypress/${year}/${SprintVersion}/${TenantEnvironment}/DSD NonO365/${JOB_NAME}_${BUILD_NUMBER}"
+                            fileOperations([folderCreateOperation(folderPath), folderCopyOperation(destinationFolderPath: folderPath, sourceFolderPath:fileContents)])
+                            
+                        }
+                  
+                    }    
+            } 
+           
+       }
+        
+        success
+        {
+            script{
+                
+                   def calendar = Calendar.getInstance()
+                   calendar.timeZone = TimeZone.getTimeZone("IST")
+
+                         def year = calendar.get(Calendar.YEAR)
+                     def monthNum = calendar.get(Calendar.MONTH) + 1
+                    def month = String.format('%02d', calendar.get(Calendar.MONTH) + 1)
+                    def date = String.format('%02d', calendar.get(Calendar.DATE))
+                         def monthNames = ["January", "February", "March", "April", "May", "June",
+                        "July", "August", "September", "October", "November", "December"]
+
+                        def monthName = monthNames[monthNum - 1]
+            
+             if(env.TenantEnvironment == 'Daily Build(Stage)')
+            {
+           
+                 emailext attachLog: true, attachmentsPattern: '**/cucumber-report.html', body: "Hi Team, <br> <br> <b> DataSource Discovery BAT suite </b> automation(Cypress) script has been executed successfully.<a href='https://cypress.exterro.info/${year}/${TenantEnvironment}/${monthName}/${date}_${month}_${year}/DSD NonO365/${JOB_NAME}_${BUILD_NUMBER}'>Click here to view the report</a>  <br><br>  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Tenant name : <b> $Tenantname </b> <br> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  Environment :  <b> $TenantEnvironment </b><br><br> Please find the attached report below, <br> ",mimeType: 'text/html', subject: "#${env.BUILD_NUMBER} Build "+currentBuild.currentResult+"- DSD BAT suite - Non O365 (Cypress) - ${date}/${month}/${year}" , from: "Cypress QA Team <noreply@exterro.com>", to: 'jeeva.ramakrishnan@exterro.com,kavipriya.ponnusamy@exterro.com,kalaiyarasi.madhaiyan@exterro.com,sobana.rasu@exterro.com,cc:gurubaran.amirthaganesan@exterro.com,cc:vigneshwaran.balasubramanian@exterro.com,cc:jomy.george@exterro.com,cc:senthil.subramanian@exterro.com'
+            }
+            else{
+                
+                emailext attachLog: true, attachmentsPattern: '**/cucumber-report.html', body: "Hi Team, <br> <br> <b> DataSource Discovery BAT suite </b> automation(Cypress) script has been executed successfully.<a href='https://cypress.exterro.info/${year}/${SprintVersion}/${TenantEnvironment}/DSD NonO365/${JOB_NAME}_${BUILD_NUMBER}'>Click here to view the report</a> <br><br>  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Tenant name : <b> $Tenantname </b> <br> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  Environment :  <b> $TenantEnvironment </b><br><br> Please find the attached report below, <br> ",mimeType: 'text/html', subject: "#${env.BUILD_NUMBER} Build "+currentBuild.currentResult+"- DSD BAT suite - Non O365  $env.TenantEnvironment (Cypress) - ${date}/${month}/${year}" ,from: "Cypress QA Team <noreply@exterro.com>",  to: 'jeeva.ramakrishnan@exterro.com,kavipriya.ponnusamy@exterro.com,kalaiyarasi.madhaiyan@exterro.com,sobana.rasu@exterro.com,cc:gurubaran.amirthaganesan@exterro.com,cc:vigneshwaran.balasubramanian@exterro.com,cc:jomy.george@exterro.com,cc:senthil.subramanian@exterro.com,cc:jagadesh.rangaswamy@exterro.com,cc:sathish.dhandapani@exterro.com,cc:karthikeyan.thirunavukkarasu@exterro.com'
+
+            }
+            }
+           }
+            
+        failure {
+            
+            script{
+                
+                   def calendar = Calendar.getInstance()
+                   calendar.timeZone = TimeZone.getTimeZone("IST")
+
+                         def year = calendar.get(Calendar.YEAR)
+                     def monthNum = calendar.get(Calendar.MONTH) + 1
+                    def month = String.format('%02d', calendar.get(Calendar.MONTH) + 1)
+                    def date = String.format('%02d', calendar.get(Calendar.DATE))
+                         def monthNames = ["January", "February", "March", "April", "May", "June",
+                        "July", "August", "September", "October", "November", "December"]
+
+                        def monthName = monthNames[monthNum - 1]
+            
+             if(env.TenantEnvironment == 'Daily Build(Stage)')
+            {
+              
+            emailext attachLog: true, attachmentsPattern: '**/cucumber-report.html', body: "Hi Team, <br> <br> <b> DataSource Discovery BAT suite </b> automation(Cypress) script execution has failed. Kindly make the necessary changes to the script and commit it (if required).<a href='https://cypress.exterro.info/${year}/${TenantEnvironment}/${monthName}/${date}_${month}_${year}/DSD NonO365/${JOB_NAME}_${BUILD_NUMBER}'>Click here to view the report</a> <br><br>  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Tenant name : <b> $Tenantname  </b> <br> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  Environment :  <b> $TenantEnvironment </b><br><br> Please find the attached logs and report below,", mimeType: 'text/html', subject: "#${env.BUILD_NUMBER} Build "+currentBuild.currentResult+"- DSD BAT suite - Non O365 (Cypress) - ${date}/${month}/${year}" ,from: "Cypress QA Team <noreply@exterro.com>", to: 'jeeva.ramakrishnan@exterro.com,kavipriya.ponnusamy@exterro.com,kalaiyarasi.madhaiyan@exterro.com,sobana.rasu@exterro.com,cc:gurubaran.amirthaganesan@exterro.com,cc:vigneshwaran.balasubramanian@exterro.com,cc:jomy.george@exterro.com, cc:senthil.subramanian@exterro.com'
+            }
+            else{
+                emailext attachLog: true, attachmentsPattern: '**/cucumber-report.html', body: "Hi Team, <br> <br> <b> DataSource Discovery BAT suite </b> automation(Cypress) script execution has failed. Kindly make the necessary changes to the script and commit it (if required).<a href='https://cypress.exterro.info/${year}/${SprintVersion}/${TenantEnvironment}/DSD NonO365/${JOB_NAME}_${BUILD_NUMBER}'>Click here to view the report</a> <br><br>  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Tenant name : <b> $Tenantname  </b> <br> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  Environment :  <b> $TenantEnvironment </b><br><br> Please find the attached logs and report below,", mimeType: 'text/html', subject: "#${env.BUILD_NUMBER} Build "+currentBuild.currentResult+"- DSD BAT suite - Non O365  $env.TenantEnvironment (Cypress) - ${date}/${month}/${year}" ,from: "Cypress QA Team <noreply@exterro.com>", to: 'jeeva.ramakrishnan@exterro.com,kavipriya.ponnusamy@exterro.com,kalaiyarasi.madhaiyan@exterro.com,sobana.rasu@exterro.com,cc:gurubaran.amirthaganesan@exterro.com,cc:vigneshwaran.balasubramanian@exterro.com,cc:jomy.george@exterro.com, cc:senthil.subramanian@exterro.com'
+
+            }
+            
+            }
+        }
+    }
+   
+
+}
